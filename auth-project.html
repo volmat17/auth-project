@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auth-project — дневник наставничества (Go)</title>
+<style>
+:root {
+  --bg: #f5f6f8; --bg-elevated: #ffffff; --fg: #1c1f24; --fg-muted: #5b6270;
+  --border: #e2e5ea; --accent: #2e6ee0; --accent-fg: #ffffff; --accent-soft: #e8f0fe;
+  --success: #1f9d55; --success-soft: #e5f7ec; --warn: #b5750a; --warn-soft: #fdf1de;
+  --danger: #d0342c; --card-bg: #ffffff; --code-bg: #f0f1f4;
+  --shadow: 0 1px 2px rgba(20,20,30,0.06), 0 1px 8px rgba(20,20,30,0.04);
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a; --bg-elevated: #1c1f25; --fg: #e7e9ee; --fg-muted: #9aa1ad;
+    --border: #2a2d34; --accent: #5b8def; --accent-fg: #0d1117; --accent-soft: #1c2a42;
+    --success: #3fbf72; --success-soft: #16281d; --warn: #e0a530; --warn-soft: #2c220f;
+    --danger: #ef5b52; --card-bg: #1c1f25; --code-bg: #23262c;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 2px 12px rgba(0,0,0,0.25);
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f5f6f8; --bg-elevated: #ffffff; --fg: #1c1f24; --fg-muted: #5b6270;
+  --border: #e2e5ea; --accent: #2e6ee0; --accent-fg: #ffffff; --accent-soft: #e8f0fe;
+  --success: #1f9d55; --success-soft: #e5f7ec; --warn: #b5750a; --warn-soft: #fdf1de;
+  --danger: #d0342c; --card-bg: #ffffff; --code-bg: #f0f1f4;
+  --shadow: 0 1px 2px rgba(20,20,30,0.06), 0 1px 8px rgba(20,20,30,0.04);
+}
+:root[data-theme="dark"] {
+  --bg: #14161a; --bg-elevated: #1c1f25; --fg: #e7e9ee; --fg-muted: #9aa1ad;
+  --border: #2a2d34; --accent: #5b8def; --accent-fg: #0d1117; --accent-soft: #1c2a42;
+  --success: #3fbf72; --success-soft: #16281d; --warn: #e0a530; --warn-soft: #2c220f;
+  --danger: #ef5b52; --card-bg: #1c1f25; --code-bg: #23262c;
+  --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 2px 12px rgba(0,0,0,0.25);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 15px; line-height: 1.6; min-height: 100vh;
+}
+h2, h3 { margin: 0 0 .5em; font-weight: 650; }
+p { margin: 0 0 .8em; }
+a { color: var(--accent); }
+button, textarea { font-family: inherit; }
+code {
+  background: var(--code-bg); padding: .1em .4em; border-radius: 5px;
+  font-size: .9em; font-family: "SF Mono", Consolas, Menlo, monospace;
+}
+pre {
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; overflow-x: auto; margin: 0 0 .8em;
+}
+pre code { background: none; padding: 0; font-size: .88em; }
+
+.app-shell {
+  display: grid; grid-template-columns: 280px 1fr; grid-template-rows: auto 1fr;
+  grid-template-areas: "header header" "sidebar main"; min-height: 100vh;
+}
+header.top-bar {
+  grid-area: header; display: flex; align-items: center; gap: 16px; padding: 12px 20px;
+  background: var(--bg-elevated); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20;
+}
+header.top-bar h1 { font-size: 17px; margin: 0; white-space: nowrap; }
+.overall-progress { flex: 1; display: flex; align-items: center; gap: 10px; max-width: 420px; }
+.overall-progress .bar { flex: 1; }
+.overall-progress .pct { font-size: 13px; color: var(--fg-muted); white-space: nowrap; }
+.bar { height: 8px; background: var(--code-bg); border-radius: 999px; overflow: hidden; }
+.bar .fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--success)); border-radius: 999px; transition: width .25s ease; }
+.theme-toggle {
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+  width: 36px; height: 36px; font-size: 16px; display: flex; align-items: center; justify-content: center;
+}
+
+aside.sidebar {
+  grid-area: sidebar; background: var(--bg-elevated); border-right: 1px solid var(--border);
+  padding: 16px 10px; overflow-y: auto;
+}
+.step-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px;
+  cursor: pointer; margin-bottom: 4px; border: 1px solid transparent;
+}
+.step-item:hover { background: var(--code-bg); }
+.step-item.active { background: var(--accent-soft); border-color: var(--accent); }
+.step-item .num {
+  width: 24px; height: 24px; border-radius: 50%; background: var(--code-bg); color: var(--fg-muted);
+  display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; font-weight: 650;
+}
+.step-item.done .num { background: var(--success); color: #fff; }
+.step-item.current .num { background: var(--accent); color: var(--accent-fg); }
+.step-item .label { font-size: 13.5px; }
+.step-item .status-tag {
+  margin-left: auto; font-size: 10.5px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: .03em;
+}
+
+main.content { grid-area: main; padding: 28px 40px 60px; }
+.step-header { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.badge {
+  font-size: 11px; padding: 3px 9px; border-radius: 999px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em;
+}
+.badge.done { background: var(--success-soft); color: var(--success); }
+.badge.current { background: var(--accent-soft); color: var(--accent); }
+.badge.todo { background: var(--code-bg); color: var(--fg-muted); }
+.summary { color: var(--fg-muted); margin-bottom: 20px; }
+.card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 18px 20px; margin-bottom: 18px;
+}
+.card h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .03em; color: var(--fg-muted); }
+.card ol, .card ul { margin: 0; padding-left: 20px; }
+.card li { margin-bottom: 6px; }
+.snippet-note { color: var(--fg-muted); font-size: 14px; }
+.chk { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; cursor: pointer; }
+.chk input { margin-top: 3px; }
+.chk.checked span { color: var(--fg-muted); text-decoration: line-through; }
+textarea.notes {
+  width: 100%; min-height: 90px; background: var(--code-bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; color: var(--fg); resize: vertical; font-size: 14px;
+}
+.verify { background: var(--warn-soft); border: 1px solid var(--warn); border-radius: var(--radius); padding: 14px 16px; }
+.verify h3 { color: var(--warn); }
+.nav-buttons { display: flex; justify-content: space-between; margin-top: 24px; }
+.nav-buttons button {
+  background: var(--accent); color: var(--accent-fg); border: none; border-radius: 8px;
+  padding: 9px 16px; font-size: 14px; cursor: pointer;
+}
+.nav-buttons button:disabled { opacity: .4; cursor: default; }
+.nav-buttons button.secondary { background: var(--code-bg); color: var(--fg); border: 1px solid var(--border); }
+
+.live-indicator { font-size: 11px; color: var(--success); white-space: nowrap; display: flex; align-items: center; gap: 5px; }
+.live-indicator .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); animation: pulse 2s infinite; }
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(31,157,85,.4); }
+  70% { box-shadow: 0 0 0 6px rgba(31,157,85,0); }
+  100% { box-shadow: 0 0 0 0 rgba(31,157,85,0); }
+}
+
+.tab-switcher { display: flex; gap: 6px; margin-bottom: 14px; padding: 0 2px; }
+.tab-btn { flex: 1; padding: 8px 6px; border-radius: 8px; border: 1px solid var(--border); background: var(--code-bg); color: var(--fg-muted); font-size: 12.5px; cursor: pointer; }
+.tab-btn.active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+
+.chat-thread { display: flex; flex-direction: column; gap: 16px; max-width: 880px; }
+.msg { display: flex; flex-direction: column; max-width: 82%; }
+.msg.user { align-self: flex-end; align-items: flex-end; }
+.msg.assistant { align-self: flex-start; align-items: flex-start; }
+.msg .role { font-size: 11px; color: var(--fg-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.msg .bubble { border-radius: 14px; padding: 12px 16px; }
+.msg .bubble p:last-child { margin-bottom: 0; }
+.msg.user .bubble { background: var(--accent); color: var(--accent-fg); border-bottom-right-radius: 4px; }
+.msg.user .bubble code { background: rgba(255,255,255,.18); color: inherit; }
+.msg.assistant .bubble { background: var(--card-bg); border: 1px solid var(--border); border-bottom-left-radius: 4px; box-shadow: var(--shadow); }
+
+@media (max-width: 760px) {
+  .app-shell { grid-template-columns: 1fr; grid-template-areas: "header" "sidebar" "main"; }
+  aside.sidebar { border-right: none; border-bottom: 1px solid var(--border); display: flex; overflow-x: auto; padding: 10px; }
+  .step-item { flex-shrink: 0; }
+  main.content { padding: 20px 16px; }
+  .msg { max-width: 92%; }
+  .live-indicator span:not(.dot) { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="top-bar">
+    <h1>🔐 Auth-project</h1>
+    <div class="overall-progress">
+      <div class="bar"><div class="fill" id="overallFill" style="width:0%"></div></div>
+      <span class="pct" id="overallPct">0/7 шагов</span>
+    </div>
+    <span class="live-indicator" title="Страница сама перечитывает файл с диска каждые ~30 секунд"><span class="dot"></span><span>авто-обновление</span></span>
+    <button class="theme-toggle" id="themeToggle" title="Тема">🌓</button>
+  </header>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="content" id="content"></main>
+</div>
+
+<script>
+/* ===== ДАННЫЕ ДИАЛОГА =====
+   Обновляется по ходу нашего общения: каждый пройденный шаг получает
+   status: "done", текущий — "current", остальные — "todo".
+*/
+const STEPS = [
+  {
+    id: "step-1-init",
+    title: "1. Инициализация проекта",
+    status: "done",
+    summary: "Создаём go.mod и минимальный HTTP-сервер, чтобы убедиться, что всё собирается и запускается.",
+    objectives: [
+      "Выполнить go mod init <имя_модуля> (например auth-app) — создаст go.mod, паспорт проекта с путём модуля и версиями зависимостей.",
+      "Создать main.go, начинающийся с package main — только из этого пакета с функцией main() собирается исполняемый бинарник.",
+      "Импортировать net/http (HTTP-сервер) и log (вывод ошибок).",
+      "Написать func main() — точку входа без параметров и без возвращаемого значения.",
+      "Зарегистрировать обработчик на /health через http.HandleFunc.",
+      "Запустить сервер через http.ListenAndServe(\":8080\", nil), обернув ошибку в log.Fatal."
+    ],
+    snippets: [
+      {
+        label: "Объявление пакета и импорты",
+        code: `package main
+
+import (
+    "net/http"
+    "log"
+)`,
+        note: "package main — специальное имя пакета: только из него можно собрать исполняемый бинарник. import перечисляет пакеты стандартной библиотеки, которые используются дальше."
+      },
+      {
+        label: "Точка входа",
+        code: `func main() {
+    // тут будет тело
+}`,
+        note: "func main() — без параметров, без возвращаемого значения. С неё стартует программа."
+      },
+      {
+        label: "Обработчик и запуск сервера",
+        code: `func handler(w http.ResponseWriter, r *http.Request) {
+    w.Write([]byte("OK"))
+}
+
+http.HandleFunc("/health", handler)
+log.Fatal(http.ListenAndServe(":8080", nil))`,
+        note: "w — куда писать ответ (http.ResponseWriter), r — что пришло в запросе (*http.Request). ListenAndServe блокирует выполнение и возвращает error — если сервер упадёт, log.Fatal выведет причину и завершит программу."
+      }
+    ],
+    checklist: [
+      { id: "step-1-init.gomod", text: "go mod init выполнен, go.mod создан" },
+      { id: "step-1-init.mainfile", text: "main.go с package main и нужными import" },
+      { id: "step-1-init.handler", text: "обработчик /health написан" },
+      { id: "step-1-init.listen", text: "http.ListenAndServe запускает сервер" }
+    ],
+    verify: "go run main.go, затем в другом терминале curl localhost:8080/health — должен вернуться \"OK\"."
+  },
+  {
+    id: "step-2-register",
+    title: "2. Регистрация",
+    status: "current",
+    summary: "Добавляем POST /register: принимаем JSON, проверяем данные и превращаем пароль в безопасный bcrypt-хеш.",
+    objectives: [
+      "Создать структуру для входящих данных регистрации: логин и пароль. Структура нужна, чтобы Go понимал, в какие поля раскладывать JSON.",
+      "Создать обработчик registerHandler с теми же параметрами w http.ResponseWriter и r *http.Request.",
+      "Разрешить только метод POST. Остальные методы должны получать ошибку 405 Method Not Allowed.",
+      "Прочитать JSON из тела запроса через json.NewDecoder(r.Body).Decode(&data). Символ & передаёт адрес структуры, чтобы Decode мог её заполнить.",
+      "Проверить, что логин не пустой, а пароль имеет разумную минимальную длину.",
+      "Подключить пакет golang.org/x/crypto/bcrypt и создать хеш через bcrypt.GenerateFromPassword.",
+      "Не сохранять и не возвращать исходный пароль. На этом этапе можно временно вернуть сообщение об успешной регистрации."
+    ],
+    snippets: [
+      {
+        label: "Структура входящего JSON",
+        code: `type RegisterRequest struct {
+    Login    string \`json:"login"\`
+    Password string \`json:"password"\`
+}`,
+        note: "Это не пользователь в базе, а форма входящих данных. Теги json связывают поля Go с ключами login и password в JSON."
+      },
+      {
+        label: "Проверка HTTP-метода",
+        code: `if r.Method != http.MethodPost {
+    // вернуть ошибку 405
+    return
+}`,
+        note: "Регистрация меняет данные, поэтому используем POST. return сразу прекращает выполнение обработчика после ошибки."
+      },
+      {
+        label: "Чтение JSON",
+        code: `var data RegisterRequest
+err := json.NewDecoder(r.Body).Decode(&data)`,
+        note: "Создаём пустую структуру data. Decoder читает тело запроса и записывает значения внутрь неё. &data нужен, потому что без адреса функцию нельзя изменить эту переменную."
+      },
+      {
+        label: "Хеширование пароля",
+        code: `hash, err := bcrypt.GenerateFromPassword(
+    []byte(data.Password),
+    bcrypt.DefaultCost,
+)`,
+        note: "Пароль преобразуется в байты и хешируется. В базу позже пойдёт hash, а не data.Password. Хеш нельзя превратить обратно в исходный пароль."
+      }
+    ],
+    checklist: [
+      { id: "step-2-register.struct", text: "Создана структура RegisterRequest с JSON-тегами" },
+      { id: "step-2-register.route", text: "Зарегистрирован маршрут /register" },
+      { id: "step-2-register.method", text: "Обработчик принимает только POST" },
+      { id: "step-2-register.decode", text: "JSON читается в структуру через Decoder" },
+      { id: "step-2-register.validation", text: "Добавлена проверка логина и пароля" },
+      { id: "step-2-register.bcrypt", text: "Пароль хешируется через bcrypt" }
+    ],
+    verify: "Запустить сервер и отправить POST-запрос с JSON на /register. Корректные данные должны дать успешный ответ; пустой логин, короткий пароль, сломанный JSON и GET-запрос должны вернуть ошибки."
+  },
+  {
+    id: "step-3-sqlite",
+    title: "3. Хранение в SQLite",
+    status: "todo",
+    summary: "Таблица users, сохранение и чтение через database/sql.",
+    objectives: [],
+    snippets: [],
+    checklist: [],
+    verify: ""
+  },
+  {
+    id: "step-4-login",
+    title: "4. Логин и выдача JWT",
+    status: "todo",
+    summary: "Сверка пароля с хешем, генерация подписанного JWT-токена.",
+    objectives: [],
+    snippets: [],
+    checklist: [],
+    verify: ""
+  },
+  {
+    id: "step-5-middleware",
+    title: "5. Middleware для JWT",
+    status: "todo",
+    summary: "Проверка токена на защищённых эндпоинтах, например /me.",
+    objectives: [],
+    snippets: [],
+    checklist: [],
+    verify: ""
+  },
+  {
+    id: "step-6-errors",
+    title: "6. Обработка ошибок",
+    status: "todo",
+    summary: "Единый формат ответов и статус-коды для всех эндпоинтов.",
+    objectives: [],
+    snippets: [],
+    checklist: [],
+    verify: ""
+  },
+  {
+    id: "step-7-extra",
+    title: "7. Доп. по желанию",
+    status: "todo",
+    summary: "Logout, refresh-токены, тесты — по желанию, после основного стека.",
+    objectives: [],
+    snippets: [],
+    checklist: [],
+    verify: ""
+  }
+];
+
+/* ===== ЧАТЫ =====
+   Тут храним переписку по этому проекту. По ходу диалога я дописываю сюда
+   новые сообщения; если текущий чат завершится — рядом появится новая
+   сессия в этом же массиве.
+*/
+const CHATS = [
+  {
+    id: "session-1",
+    title: "Сессия 1",
+    date: "2026-07-25",
+    messages: [
+      { role: "user", text: 'Смотри, я хочу начать разбираться в golang намного больше, и при этом не хочу зубрить теорию (для меня это скучно и я быстро выгораю). Давай начнём писать проект авторизации, твоя задача — НЕ писать код, а объяснять, что мне нужно сделать, но делать это так, чтобы я понимал, что именно мне писать (потому что у меня проблемы с написанием кода с нуля, уже готовый код я +- читать могу, но написать самому — проблематично). Можешь показывать конструкции например написания, объяснять их и тому подобное, но не писать готовый код. Если есть вопросы, готов на них ответить' },
+      { role: "assistant", text: 'Отлично, план понятен: я буду наставником — объясняю, что и зачем писать, показываю синтаксические конструкции, но код пишешь ты сам.\n\nУточнили три момента и выбрали: **REST API + SQLite + JWT**.\n\n**Дорожная карта (7 шагов)**\n1. Инициализация проекта — go.mod, минимальный HTTP-сервер\n2. Регистрация — JSON, bcrypt\n3. Хранение в SQLite\n4. Логин — сверка пароля, выдача JWT\n5. Middleware для проверки JWT\n6. Обработка ошибок — единый формат ответов\n7. Доп. по желанию — logout, refresh-токены, тесты\n\nИдём маленькими шагами: сначала всё в одном main.go, разложим на пакеты позже, когда файл станет неудобным.\n\n**Шаг 1: инициализация + живой сервер**\n\n1. `go mod init <имя_модуля>` (например `auth-app`) — создаёт go.mod, паспорт проекта.\n2. `main.go` начинается с `package main` — только из этого пакета с функцией `main()` собирается бинарник.\n3. `import` с `net/http` и `log`.\n4. `func main()` — точка входа.\n5. `http.HandleFunc("/health", handler)` — регистрирует обработчик.\n6. `http.ListenAndServe(":8080", nil)`, обёрнутый в `log.Fatal`, запускает сервер.\n\nПроверка: `go run main.go`, затем `curl localhost:8080/health` — должен вернуться "OK".' },
+      { role: "user", text: 'Сделай визуальный интерфейс нашего "диалога", чтобы мне легче было воспринимать информацию, по мере нашего общения эта страница html должна также обновляться' },
+      { role: "assistant", text: 'Готово: создал auth-project.html рядом с курсом (открывается как обычный локальный файл).\n\nСлева — навигация по всем 7 шагам с прогрессом, справа — детали текущего шага: что сделать, конструкции с пояснениями, чек-лист (сохраняется в localStorage), как проверить, и поле для своих заметок.\n\nШаг 1 заполнен полностью, шаги 2-7 пока заглушки — буду наполнять их по ходу нашего разговора, редактируя этот же файл. После моих правок нужно обновлять страницу (F5).' },
+      { role: "user", text: "[прислал скриншот страницы] сделай в полный экран" },
+      { role: "assistant", text: "Добавил кнопку ⛶ рядом с переключателем темы — по клику разворачивает страницу на весь экран через Fullscreen API, иконка меняется на 🗗 для выхода." },
+      { role: "user", text: "Нет, ты не понял задачи, текст только на половину экрана в горизонталь, убери последний фикс и сделай новый" },
+      { role: "assistant", text: 'Убрал кнопку полноэкранного режима — это было не то. Реальная причина: у блока с контентом стоял `max-width: 820px`, из-за чего текст занимал только часть широкого экрана, а справа оставалась пустота. Убрал это ограничение — теперь контент растягивается на всю доступную ширину.' },
+      { role: "user", text: "Теперь объясни мне, как именно работает то, что я написал, простыми словами" },
+      { role: "assistant", text: 'Смотрю твой main.go — ты в точности написал то, что нужно для шага 1. Разберём построчно простыми словами.\n\n```go\npackage main\n```\nЭто как ярлык на файле: "этот код — не библиотека, а самостоятельная программа". Go понимает, что из этого пакета можно собрать бинарник.\n\n```go\nimport (\n    "log"\n    "net/http"\n)\n```\n`net/http` — всё для работы с HTTP. `log` — вывод сообщений в консоль, в том числе для аварийного завершения.\n\n```go\nfunc main() {\n\thttp.HandleFunc("/health", handler)\n\tlog.Fatal(http.ListenAndServe(":8080", nil))\n}\n```\nЭто точка старта программы.\n\n- `http.HandleFunc("/health", handler)` — как запись в телефонной книге: "если постучатся по /health, зови handler". Сама по себе строка ничего не запускает, только регистрирует правило.\n- `http.ListenAndServe(":8080", nil)` — реально открывает порт 8080 и слушает запросы. Не возвращается, пока сервер работает.\n- `log.Fatal(...)` — если ListenAndServe вернёт ошибку (например, порт занят), напечатает её и завершит программу.\n\n```go\nfunc handler(w http.ResponseWriter, r *http.Request) {\n\tw.Write([]byte("OK"))\n}\n```\nЭту функцию вызовут по адресу /health. `r` — сам запрос, `w` — "блокнот" для ответа. `w.Write([]byte("OK"))` пишет байты "OK" в ответ; `[]byte(...)` — конвертация строки в байты, потому что Write работает только с байтами.\n\n**Итог:** сервер открывает порт 8080 и слушает вечно. Как только кто-то обращается на /health, срабатывает handler и отвечает "OK".' },
+      { role: "user", text: "Теперь объясни синтаксис" },
+      { role: "assistant", text: 'Разберём грамматику файла — правила, по которым строки складываются в валидный Go-код.\n\n**1. Объявление пакета**\n```go\npackage main\n```\n`package` + имя, обязательно первая непустая строка. Без точки с запятой в конце — Go сам расставляет `;` по своим правилам (automatic semicolon insertion), руками их не пишут.\n\n**2. Импорт-блок**\n```go\nimport (\n\t"log"\n\t"net/http"\n)\n```\nОдин `import` + круглые скобки = групповой импорт. Каждый путь — строковый литерал в кавычках. Если пакет один, скобки можно опустить.\n\n**3. Объявление функции**\n```go\nfunc main() { ... }\nfunc handler(w http.ResponseWriter, r *http.Request) { ... }\n```\nШаблон: `func` + имя + `(параметры)` + `{ тело }`. Открывающая `{` обязана стоять на той же строке, что и сигнатура — иначе код не скомпилируется (та же автоподстановка `;`).\n\n**4. Параметры — тип идёт ПОСЛЕ имени**\n```go\nw http.ResponseWriter, r *http.Request\n```\nВ Go пишут `имя Тип`, а не `Тип имя`. `*http.Request` — звёздочка перед типом означает указатель: не сама структура, а адрес, где она лежит в памяти.\n\n**5. Вызов функции через точку**\n```go\nhttp.HandleFunc("/health", handler)\nlog.Fatal(http.ListenAndServe(":8080", nil))\n```\n`пакет.Функция(аргументы)`. Регистр важен: `HandleFunc`, `Fatal`, `ListenAndServe` — с большой буквы, значит экспортированы (видны снаружи пакета). С маленькой (`main`, `handler`) — приватны для своего пакета.\n\n`log.Fatal(http.ListenAndServe(...))` — вложенный вызов: сначала выполняется внутренний, его результат сразу передаётся в log.Fatal.\n\n`handler` без скобок в `HandleFunc("/health", handler)` значит "передай саму функцию как значение", а не "вызови её прямо сейчас".\n\n`nil` — служебное слово Go, означает "пусто". Здесь: "используй маршрутизатор по умолчанию".\n\n**6. Конверсия типа**\n```go\nw.Write([]byte("OK"))\n```\n`[]byte("OK")` — явное преобразование: `Тип(значение)`. `[]byte` — тип "срез байт". Write принимает именно []byte, а не string напрямую.' },
+      { role: "user", text: "сделай доп. вкладку на этой html странице, где будет отображаться наш этот чат (И другие, если этот завершится). Также он должен быть все время актуальным, если я пишу сюда что-то, то там тоже должно все обновляться. Это для приятного визуального восприятия нашего чата" },
+      { role: "assistant", text: 'Добавил вкладку "💬 Чат" — переключатель сверху сайдбара. Слева список чатов (сейчас один — сегодняшний, новые сессии буду добавлять сюда же), справа сама переписка в виде пузырьков.\n\nВажный момент по поводу "всё время актуально": файл — статичный HTML на диске, у него нет прямого канала к нашему разговору в терминале. Технически это работает так: я сам дописываю сюда наши сообщения по ходу диалога (как и с шагами роадмапа), а страница сама перечитывает файл с диска каждые 30 секунд — так что после того как я сохраню правки, обновление подтянется само, без ручного F5. Настоящий мгновенный пуш потребовал бы локального сервера с вебсокетом — отдельная и куда более тяжёлая задача, скажи, если это реально нужно.' },
+      { role: "user", text: "А как в следующей сессии (Если эту закончу), ты поймешь что нужно подтягивать чат на страницу?" },
+      { role: "assistant", text: 'Честно: сама по себе новая сессия ничего не поймёт автоматически — у меня нет доступа к прошлым разговорам, если не сохранено явно.\n\nРаботает так: у меня есть файл долгосрочной памяти по этой папке проекта, я сохранил туда запись про конвенцию с CHATS. Она сработает, только если продолжишь разговор в этой же папке (learn-GO) — тогда я сам подтяну память. Если начнёшь совсем новый чат не по этому пути — не узнаю. Так что в начале новой сессии стоит явно сказать что-то вроде "продолжаем auth-project, допиши новый чат на страницу".' },
+      { role: "user", text: "сейчас чат как будто не подтягивается" },
+      { role: "assistant", text: 'Это не баг — я просто ещё не успел дописать в файл последние реплики (вопрос про новую сессию и ответ на него), поэтому странице было неоткуда их взять. У ручной синхронизации всегда будет лаг в одну реплику, пока я физически не отредактирую файл. Дописал недостающее прямо сейчас.' },
+      { role: "user", text: "[прислал скриншот] Сделай так, чтобы весь текст отображался корректно, без знаков вопроса и т.д." },
+      { role: "assistant", text: 'Нашёл баг: код-блоки в сообщениях идут через одинарный перенос строки, а не через пустую строку, а рендерер ожидал, что блок кода — это отдельный "абзац" целиком. Из-за этого спецсимвол-заглушка не находил себе пару и печатался как есть — браузер рисует непечатаемый байт квадратиком с вопросом.\n\nПереписал renderMarkdownLite на split() с захватывающей группой в регулярке — он режет текст прямо по границам блока кода, без хрупких заглушек. Проверил через реальный JS-движок (JavaScriptCore) — синтаксис ок, лишних байт в файле не осталось.' },
+      { role: "user", text: "объясни зачем пишем nil" },
+      { role: "assistant", text: '`nil` — "пустое значение" Go, используется для указателей, интерфейсов, срезов, map, каналов, функций.\n\n```go\nfunc ListenAndServe(addr string, handler Handler) error\n```\nВторой параметр — `handler Handler`, а `Handler` — интерфейс ("что угодно, что умеет обрабатывать HTTP-запросы"). Раз это интерфейс, туда можно передать либо что-то конкретное, либо `nil` — "ничего конкретного не передаю".\n\nВнутри net/http есть проверка: если handler == nil, библиотека сама подставляет http.DefaultServeMux — глобальный маршрутизатор по умолчанию.\n\nКлючевая связка: `http.HandleFunc("/health", handler)` молча регистрирует маршрут именно в этом DefaultServeMux. То есть HandleFunc и nil в ListenAndServe — две половинки одного механизма: одна кладёт маршруты в глобальный роутер, вторая говорит "используй его для входящих запросов".\n\nНа шаге 5 (middleware для JWT) понадобится уже свой роутер — http.NewServeMux() — тогда вместо nil будешь передавать его. nil сейчас — это "используй дефолтный", а не единственный вариант.' },
+      { role: "user", text: "слишком сложно, объясни проще" },
+      { role: "assistant", text: 'Аналогия: сервер — это ресепшн в офисе. Приходит посетитель (запрос) — кто-то должен решить, в какой кабинет его отправить. Эту роль называют роутером.\n\nВторой аргумент в `ListenAndServe(":8080", nil)` — это "какого роутера использовать". `nil` значит "отдельного не даю, используй тот, что уже есть по умолчанию".\n\nА "тот, что по умолчанию" — не пустой, потому что чуть выше уже написано:\n```go\nhttp.HandleFunc("/health", handler)\n```\nЭта строка кладёт правило "если /health — иди в handler" в тот самый дефолтный роутер. Так что к моменту вызова ListenAndServe роутер уже не пустой.\n\nКороче: nil здесь значит не "ничего не делай", а "не выдумывай свой отдельный роутер, бери тот, что Go уже держит наготове и куда уже что-то записано через HandleFunc".' },
+      { role: "user", text: "а почему у нас сначала запрос а потом запуск сервера?" },
+      { role: "assistant", text: 'Потому что Go выполняет код внутри main() строго по порядку, сверху вниз — а http.ListenAndServe не возвращает управление обратно, пока сервер не остановится. Он не "запустил и пошёл дальше" — он зависает внутри этой строчки навсегда.\n\nПредставь ресторан: сначала повар пишет меню (какие блюда готовим — это HandleFunc, "если спросят /health, отвечай так"), и только потом открываются двери для посетителей (ListenAndServe — "начинаем принимать гостей"). Сделай наоборот — код с меню просто никогда не выполнится, потому что как только открыли двери, ты застрял там, принимая гостей, и до следующей строчки очередь не дойдёт.\n\nПорядок не стилистический — единственный рабочий вариант: всё, что должно случиться ДО открытия сервера, обязано стоять раньше блокирующего вызова ListenAndServe.' },
+      { role: "user", text: "По поводу моего вопроса про порядок запуска сервера не очень понял, а как это работает в крупных организациях? Отвечай понятно и не супер подробно" },
+      { role: "assistant", text: 'Тот же порядок и там — принцип не меняется от масштаба: настроить всё → запустить блокирующий listen. Ни один фреймворк не может это обойти, потому что это не выбор автора кода, а как работает сеть.\n\nЧто реально добавляется в проде:\n\n- **Graceful shutdown.** Просто оборвать процесс — плохо, кто-то посреди запроса потеряет ответ. Поэтому ListenAndServe запускают в отдельной горутине, а в main() дальше ждут сигнал от ОС и вызывают Shutdown() — "перестань принимать новых, доделай текущих, потом выключайся". Порядок "настройка → сервер" не меняется, просто добавляется аккуратный конец.\n- **Масштаб — это не один сервер, а много одинаковых копий.** Крупные компании запускают десятки/сотни процессов с ровно таким же main(), как у тебя, а сверху балансировщик нагрузки раскидывает запросы между ними. Внутри каждой копии — тот же порядок: сначала меню, потом двери.\n\nТо, что написано в шаге 1 — не учебная версия, а структурно тот же скелет, что и в проде, просто без graceful shutdown (хороший кандидат добавить в шаг 6-7).' },
+      { role: "user", text: "А, то есть мы просто перед запуском пишем то, что можем использовать, а потом уже используем с запущенным сервом, да?" },
+      { role: "assistant", text: 'Почти точно, но с уточнением: не мы "используем" зарегистрированное — использует его сам сервер, автоматически, при каждом входящем запросе.\n\n1. **До старта** — мы кладём в "меню" пары "путь → что делать" (HandleFunc). Это просто заполнение справочника в памяти, ничего не выполняется.\n2. **Запускаем** сервер (ListenAndServe) — с этого момента наш код в main() дальше не идёт, он "спит" внутри этого вызова.\n3. **Дальше работает не наш код, а сам Go изнутри net/http**: как только приходит запрос на /health, он сам лезет в тот справочник, находит handler и вызывает его — без нашего участия, мы этот момент не пишем и не видим.\n\nТак что "использование" происходит не как следующий шаг в твоём коде, а как реакция на внешнее событие (запрос), которую за тебя выполняет библиотека.' },
+      { role: "user", text: "Все в принципе понял, напиши мне только краткую шпаргалку про nil" },
+      { role: "assistant", text: '**Шпаргалка: nil в Go**\n\n- Это "нет значения" — как null в других языках, но не 0 и не "".\n- nil бывает только у "ссылочных" типов: указатель (*T), интерфейс, map, срез ([]T), канал (chan), функция.\n- У обычных типов своё "пустое" значение, не nil: int → 0, string → "", bool → false, структура → все поля обнулены.\n\n**Где реально встретишь:**\n- error — если функция ничего не сломала, возвращает nil вместо ошибки. Отсюда классика: if err != nil.\n- Необязательный параметр-интерфейс (как в ListenAndServe(":8080", nil)) — "используй поведение по умолчанию".\n- Переменная объявлена, но не инициализирована (var p *User) — автоматически nil.\n\n**Осторожно:**\n- Разыменование nil-указателя (*p, когда p == nil) — паника (nil pointer dereference).\n- Запись в nil-map — тоже паника. Чтение — можно, просто вернёт нулевое значение.\n- Срез с nil — читать/перебирать можно (длина 0), это не ошибка.' },
+      { role: "user", text: "про nil непосредственно в этом моменте" },
+      { role: "assistant", text: '**Шпаргалка: nil в http.ListenAndServe(":8080", nil)**\n\n- Это второй аргумент функции ListenAndServe(addr string, handler http.Handler).\n- handler ожидает тип http.Handler — интерфейс "то, что умеет обрабатывать HTTP-запросы".\n- nil здесь = "своего обработчика не даю, используй стандартный" → Go подставляет http.DefaultServeMux.\n- Работает это только потому, что до этой строки уже вызван http.HandleFunc("/health", handler) — а он кладёт маршрут именно в DefaultServeMux. Без этой строки nil означал бы "пустой роутер, ничего не обслуживает".\n- Когда позже (шаг 5, middleware) появится свой http.NewServeMux() — на этом месте вместо nil будет он: ListenAndServe(":8080", myMux).' }
+      ,{ role: "user", text: "И так, первый этап я завершил, давай перейдем ко второму, дай по нему информацию" },
+      { role: "assistant", text: "Перешли к этапу 2 — регистрации. На этом шаге добавляем POST /register, принимаем JSON с логином и паролем, проверяем данные и хешируем пароль через bcrypt. Исходный пароль хранить нельзя. Пока без базы данных: сохранение в SQLite будет отдельным третьим этапом." }
+    ]
+  }
+];
+
+/* ===== ЛОГИКА ===== */
+const LS_CHECKLIST = "authProject.checklist.v1";
+const LS_NOTES = "authProject.notes.v1";
+const LS_ACTIVE = "authProject.active.v1";
+const LS_THEME = "authProject.theme.v1";
+const LS_TAB = "authProject.tab.v1";
+const LS_CHAT_ACTIVE = "authProject.chatActive.v1";
+
+function loadChecklist() { try { return JSON.parse(localStorage.getItem(LS_CHECKLIST)) || {}; } catch { return {}; } }
+function saveChecklist(o) { localStorage.setItem(LS_CHECKLIST, JSON.stringify(o)); }
+function loadNotes() { try { return JSON.parse(localStorage.getItem(LS_NOTES)) || {}; } catch { return {}; } }
+function saveNotes(o) { localStorage.setItem(LS_NOTES, JSON.stringify(o)); }
+
+let checklistState = loadChecklist();
+let notesState = loadNotes();
+let activeId = localStorage.getItem(LS_ACTIVE) || STEPS.find(s => s.status === "current")?.id || STEPS[0].id;
+let activeTab = localStorage.getItem(LS_TAB) || "roadmap";
+let activeChatId = localStorage.getItem(LS_CHAT_ACTIVE) || (CHATS[0] && CHATS[0].id);
+
+function stepIndex(id) { return STEPS.findIndex(s => s.id === id); }
+
+function setTab(tab) { activeTab = tab; localStorage.setItem(LS_TAB, tab); render(); }
+
+function renderSidebar() {
+  const sidebar = document.getElementById("sidebar");
+  sidebar.innerHTML = "";
+
+  const switcher = document.createElement("div");
+  switcher.className = "tab-switcher";
+  const roadmapBtn = document.createElement("button");
+  roadmapBtn.className = "tab-btn" + (activeTab === "roadmap" ? " active" : "");
+  roadmapBtn.textContent = "🗺️ Роадмап";
+  roadmapBtn.addEventListener("click", () => setTab("roadmap"));
+  const chatBtn = document.createElement("button");
+  chatBtn.className = "tab-btn" + (activeTab === "chat" ? " active" : "");
+  chatBtn.textContent = "💬 Чат";
+  chatBtn.addEventListener("click", () => setTab("chat"));
+  switcher.appendChild(roadmapBtn);
+  switcher.appendChild(chatBtn);
+  sidebar.appendChild(switcher);
+
+  if (activeTab === "roadmap") {
+    STEPS.forEach((step, i) => {
+      const el = document.createElement("div");
+      el.className = "step-item " + step.status + (step.id === activeId ? " active" : "");
+      const num = document.createElement("div");
+      num.className = "num";
+      num.textContent = step.status === "done" ? "✓" : String(i + 1);
+      const label = document.createElement("div");
+      label.className = "label";
+      label.textContent = step.title.replace(/^\d+\.\s*/, "");
+      el.appendChild(num);
+      el.appendChild(label);
+      el.addEventListener("click", () => { activeId = step.id; localStorage.setItem(LS_ACTIVE, activeId); render(); });
+      sidebar.appendChild(el);
+    });
+  } else {
+    CHATS.forEach(chat => {
+      const el = document.createElement("div");
+      el.className = "step-item" + (chat.id === activeChatId ? " active" : "");
+      const num = document.createElement("div");
+      num.className = "num";
+      num.textContent = "💬";
+      const label = document.createElement("div");
+      label.className = "label";
+      const titleEl = document.createElement("div");
+      titleEl.textContent = chat.title;
+      const dateEl = document.createElement("div");
+      dateEl.style.cssText = "font-size:11px;color:var(--fg-muted);margin-top:2px;";
+      dateEl.textContent = chat.date;
+      label.appendChild(titleEl);
+      label.appendChild(dateEl);
+      el.appendChild(num);
+      el.appendChild(label);
+      el.addEventListener("click", () => { activeChatId = chat.id; localStorage.setItem(LS_CHAT_ACTIVE, activeChatId); render(); });
+      sidebar.appendChild(el);
+    });
+    if (!CHATS.length) {
+      const empty = document.createElement("p");
+      empty.style.cssText = "color:var(--fg-muted);font-size:13px;padding:0 12px;";
+      empty.textContent = "Чатов пока нет.";
+      sidebar.appendChild(empty);
+    }
+  }
+}
+
+function renderMarkdownLite(text) {
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const parts = text.split(/```[a-zA-Z]*\n([\s\S]*?)```/g);
+  let html = "";
+  parts.forEach((part, i) => {
+    if (i % 2 === 1) {
+      html += "<pre><code>" + esc(part.replace(/\n$/, "")) + "</code></pre>";
+      return;
+    }
+    let t = esc(part);
+    t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
+    t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    html += t.split(/\n\n+/)
+      .filter(p => p.trim().length)
+      .map(p => "<p>" + p.replace(/\n/g, "<br>") + "</p>")
+      .join("");
+  });
+  return html;
+}
+
+function renderChatContent() {
+  const chat = CHATS.find(c => c.id === activeChatId) || CHATS[0];
+  const content = document.getElementById("content");
+  content.innerHTML = "";
+  if (!chat) {
+    const p = document.createElement("p");
+    p.textContent = "Чатов пока нет.";
+    content.appendChild(p);
+    return;
+  }
+
+  const header = document.createElement("div");
+  header.className = "step-header";
+  const h2 = document.createElement("h2");
+  h2.textContent = chat.title;
+  const badge = document.createElement("span");
+  badge.className = "badge todo";
+  badge.textContent = chat.date;
+  header.appendChild(h2);
+  header.appendChild(badge);
+  content.appendChild(header);
+
+  const thread = document.createElement("div");
+  thread.className = "chat-thread";
+  chat.messages.forEach(m => {
+    const msg = document.createElement("div");
+    msg.className = "msg " + m.role;
+    const roleEl = document.createElement("div");
+    roleEl.className = "role";
+    roleEl.textContent = m.role === "user" ? "Ты" : "Наставник";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.innerHTML = renderMarkdownLite(m.text);
+    msg.appendChild(roleEl);
+    msg.appendChild(bubble);
+    thread.appendChild(msg);
+  });
+  content.appendChild(thread);
+}
+
+function renderOverallProgress() {
+  const done = STEPS.filter(s => s.status === "done").length;
+  document.getElementById("overallFill").style.width = (done / STEPS.length * 100) + "%";
+  document.getElementById("overallPct").textContent = `${done}/${STEPS.length} шагов`;
+}
+
+function badgeLabel(status) {
+  if (status === "done") return "Пройдено";
+  if (status === "current") return "Сейчас";
+  return "Впереди";
+}
+
+function renderContent() {
+  const step = STEPS.find(s => s.id === activeId);
+  const content = document.getElementById("content");
+  content.innerHTML = "";
+
+  const header = document.createElement("div");
+  header.className = "step-header";
+  const h2 = document.createElement("h2");
+  h2.textContent = step.title;
+  const badge = document.createElement("span");
+  badge.className = "badge " + step.status;
+  badge.textContent = badgeLabel(step.status);
+  header.appendChild(h2);
+  header.appendChild(badge);
+  content.appendChild(header);
+
+  const summary = document.createElement("p");
+  summary.className = "summary";
+  summary.textContent = step.summary;
+  content.appendChild(summary);
+
+  if (step.objectives.length) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = "<h3>Что нужно сделать</h3>";
+    const ol = document.createElement("ol");
+    step.objectives.forEach(o => { const li = document.createElement("li"); li.textContent = o; ol.appendChild(li); });
+    card.appendChild(ol);
+    content.appendChild(card);
+  }
+
+  step.snippets.forEach(sn => {
+    const card = document.createElement("div");
+    card.className = "card";
+    const h3 = document.createElement("h3");
+    h3.textContent = sn.label;
+    const pre = document.createElement("pre");
+    const codeEl = document.createElement("code");
+    codeEl.textContent = sn.code;
+    pre.appendChild(codeEl);
+    const note = document.createElement("p");
+    note.className = "snippet-note";
+    note.textContent = sn.note;
+    card.appendChild(h3);
+    card.appendChild(pre);
+    card.appendChild(note);
+    content.appendChild(card);
+  });
+
+  if (step.checklist.length) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = "<h3>Чек-лист</h3>";
+    step.checklist.forEach(item => {
+      const label = document.createElement("label");
+      const checked = !!checklistState[item.id];
+      label.className = "chk" + (checked ? " checked" : "");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = checked;
+      input.addEventListener("change", () => {
+        checklistState[item.id] = input.checked;
+        saveChecklist(checklistState);
+        label.classList.toggle("checked", input.checked);
+      });
+      const span = document.createElement("span");
+      span.textContent = item.text;
+      label.appendChild(input);
+      label.appendChild(span);
+      card.appendChild(label);
+    });
+    content.appendChild(card);
+  }
+
+  if (step.verify) {
+    const verify = document.createElement("div");
+    verify.className = "verify";
+    verify.innerHTML = "<h3>Как проверить</h3>";
+    const p = document.createElement("p");
+    p.style.margin = "0";
+    p.textContent = step.verify;
+    verify.appendChild(p);
+    content.appendChild(verify);
+  }
+
+  const notesCard = document.createElement("div");
+  notesCard.className = "card";
+  notesCard.innerHTML = "<h3>Мои заметки</h3>";
+  const textarea = document.createElement("textarea");
+  textarea.className = "notes";
+  textarea.placeholder = "Вопросы, что не понятно, свои наблюдения...";
+  textarea.value = notesState[step.id] || "";
+  textarea.addEventListener("input", () => { notesState[step.id] = textarea.value; saveNotes(notesState); });
+  notesCard.appendChild(textarea);
+  content.appendChild(notesCard);
+
+  const nav = document.createElement("div");
+  nav.className = "nav-buttons";
+  const idx = stepIndex(step.id);
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "secondary";
+  prevBtn.textContent = "← Назад";
+  prevBtn.disabled = idx === 0;
+  prevBtn.addEventListener("click", () => { activeId = STEPS[idx - 1].id; localStorage.setItem(LS_ACTIVE, activeId); render(); });
+  const nextBtn = document.createElement("button");
+  nextBtn.textContent = "Далее →";
+  nextBtn.disabled = idx === STEPS.length - 1;
+  nextBtn.addEventListener("click", () => { activeId = STEPS[idx + 1].id; localStorage.setItem(LS_ACTIVE, activeId); render(); });
+  nav.appendChild(prevBtn);
+  nav.appendChild(nextBtn);
+  content.appendChild(nav);
+}
+
+function render() {
+  renderSidebar();
+  renderOverallProgress();
+  if (activeTab === "chat") renderChatContent(); else renderContent();
+}
+
+document.getElementById("themeToggle").addEventListener("click", () => {
+  const root = document.documentElement;
+  const current = root.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const next = current === "dark" ? "light" : "dark";
+  root.setAttribute("data-theme", next);
+  localStorage.setItem(LS_THEME, next);
+});
+const savedTheme = localStorage.getItem(LS_THEME);
+if (savedTheme) document.documentElement.setAttribute("data-theme", savedTheme);
+
+render();
+
+setInterval(() => {
+  const active = document.activeElement;
+  if (active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT")) return;
+  location.reload();
+}, 30000);
+</script>
+</body>
+</html>
