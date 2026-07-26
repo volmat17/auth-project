@@ -21,7 +21,7 @@ func main() {
 	http.HandleFunc("/register", registerHandler)
 
 	log.Printf("[INFO] Auth Project")
-	log.Printf("[INFO] ver. 1.0.0")
+	log.Printf("[INFO] ver. 1.0.1")
 	log.Printf("[INFO] Starting...")
 
 	log.Fatal(http.ListenAndServe(":8080", nil)) // Запуск локального сервера с портом 8080, nil - использование настроек по умолчанию
